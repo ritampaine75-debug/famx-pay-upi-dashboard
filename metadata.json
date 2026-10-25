@@ -1,0 +1,6 @@
+{
+  "name": "FamX Pay",
+  "description": "Seller-oriented UPI payment-link creation, customer checkout, Gmail notification matching, and real-time transaction monitoring dashboard for India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

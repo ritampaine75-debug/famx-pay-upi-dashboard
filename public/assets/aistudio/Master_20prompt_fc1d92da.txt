@@ -1,0 +1,1224 @@
+FAMX PAY — COMPLETE MASTER PRODUCT REQUIREMENTS DOCUMENT (PRD) AND IMPLEMENTATION PROMPT
+Version: 1.0
+Target market: India
+Product type: UPI payment-link creation, customer checkout, Gmail notification matching, and seller transaction dashboard
+Primary stack: React + TypeScript + Vite + Firebase Realtime Database + Cloud Firestore + secure server-side services
+Important: This document is an implementation specification. It does not claim that FamPay/FamApp provides an official merchant API or that email-only matching proves settlement.
+
+================================================================================
+0. INSTRUCTIONS TO THE AI CODING AGENT
+================================================================================
+
+Act as a senior product manager, solution architect, security engineer, UI/UX designer, React/TypeScript engineer, Firebase engineer, backend engineer, QA engineer, and technical writer.
+
+Build the complete FamX Pay application described below. Assume the developer has limited technical experience and needs explicit, sequential instructions. Do not assume missing requirements are obvious. Explain and implement the architecture, data model, routes, components, state transitions, error handling, security boundaries, setup process, tests, and deployment.
+
+Do not stop after generating a visual mockup. Implement functional forms, real database reads and writes, route handling, authentication, payment-link creation, QR generation, countdowns, Gmail connection testing, email classification, real-time updates, transaction reconciliation, and useful error states. Never fabricate successful connections, transactions, or payment confirmations.
+
+Before implementation:
+1. Inspect the repository and existing files.
+2. Preserve useful existing work and avoid deleting features without a clear reason.
+3. Identify the framework, installed dependencies, deployment target, and current Firebase configuration.
+4. Create a short implementation plan, then execute it.
+5. If a prerequisite cannot be completed without account access or deployment permission, implement the code and provide precise manual steps rather than pretending it is complete.
+
+Use English for code, identifiers, comments, UI copy, documentation, and this implementation specification. The product may offer a future language switch, but the default UI language should be English. Use Indian payment terminology and INR formatting.
+
+================================================================================
+1. PRODUCT SUMMARY
+================================================================================
+
+Product name: FamX Pay
+Positioning: A seller-oriented UPI payment-link and transaction-monitoring dashboard for India.
+Primary users:
+- Seller/merchant who creates payment requests.
+- Customer who opens a payment link and pays through a UPI app.
+- Authorized platform administrator who manages access and service health.
+
+Core user journey:
+1. Seller signs in.
+2. Seller completes the secure setup wizard.
+3. Seller tests Gmail IMAP authentication.
+4. The system searches recent mail for FamPay/FamApp-related messages and identifies likely incoming-payment notification patterns.
+5. Seller creates a payment order for a specific INR amount.
+6. The application creates a unique shareable URL and a QR code containing the correct UPI payment intent.
+7. Customer opens the URL, sees amount and merchant details, and can scan the QR or open a supported UPI application.
+8. Backend checks eligible email notifications and matches transaction evidence to orders under explicit verification rules.
+9. The public checkout and seller dashboard receive status changes in real time.
+10. Ambiguous or weakly supported matches go to reconciliation; they must not be automatically treated as confirmed settlement.
+
+Product truthfulness requirement:
+- A UPI app launch is not proof of payment.
+- A customer screenshot or browser callback is not proof of payment.
+- A Gmail message is not inherently authoritative settlement evidence.
+- Without an official provider API, reliable bank/merchant settlement feed, or an unambiguous matching reference, the system may only report an email match or a pending reconciliation state.
+- Do not market or label this as an official FamPay merchant gateway unless an authorized official integration is actually implemented.
+
+================================================================================
+2. PRODUCT GOALS AND NON-GOALS
+================================================================================
+
+Goals:
+- Create shareable payment requests in INR.
+- Create downloadable QR codes and UPI payment intents.
+- Provide an attractive customer checkout page.
+- Provide a secure Gmail connection test.
+- Detect relevant FamPay/FamApp messages and classify likely incoming versus outgoing payment notifications.
+- Prevent duplicate transaction records and arbitrary order assignment.
+- Show seller-owned orders and transaction activity in real time.
+- Use Firebase RTDB and Firestore for distinct, documented purposes.
+- Avoid requiring a manually edited .env file.
+- Provide a usable setup and diagnostics screen with accurate failure messages.
+- Work well on Android mobile browsers and desktop.
+
+Non-goals unless an official integration becomes available:
+- Directly debit a customer's bank account.
+- Guarantee payment settlement using email alone.
+- Impersonate Google Pay, PhonePe, FamPay, or another payment brand.
+- Claim official payment-provider affiliation.
+- Bypass UPI application or bank security.
+- Read unrelated private email content beyond the minimum needed for verification.
+- Store card data, UPI PINs, banking passwords, or customer authentication secrets.
+- Make production database rules public to simplify development.
+
+================================================================================
+3. REQUIRED TECHNICAL ARCHITECTURE
+================================================================================
+
+Frontend:
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Router
+- Lucide React icons
+- A maintained QR-code library
+- Firebase modular Web SDK
+- A form validation library only if it materially improves correctness
+- Accessible components and keyboard support
+
+Firebase:
+- Firebase Authentication for seller login and authorization identity.
+- Cloud Firestore for structured orders, transaction records, seller settings, reconciliation cases, and audit records.
+- Firebase Realtime Database (RTDB) for minimal live order status and seller dashboard signals.
+- Firebase App Check where supported and appropriate.
+- Firebase Emulator Suite for local testing.
+
+Backend:
+- Prefer Firebase Cloud Functions or another secure server-side runtime compatible with the chosen deployment.
+- Gmail integration must run only on the backend, not in React.
+- Use an IMAP library that is maintained and compatible with the selected runtime. If long-running IMAP connections are not supported by the deployment platform, use short-lived scheduled polling or a supported background worker.
+- Use a supported encrypted server-side secret store, such as Google Cloud Secret Manager, for persistent Gmail credentials.
+- Never embed server credentials in frontend bundles.
+
+Deployment:
+- Frontend may use Firebase Hosting or Vercel.
+- Backend must be deployed to a runtime that supports the selected Gmail polling approach.
+- Clearly document runtime, region, required APIs, billing requirements, and setup.
+- Do not claim free deployment if a required service needs a paid plan.
+
+No-.env requirement:
+- Do not require the developer to manually create or edit a `.env` file.
+- Firebase client configuration can live in one centralized client configuration module because it is not a server secret.
+- Server secrets must be provisioned through an authenticated setup flow and a supported secret manager or deployment platform secret interface.
+- If the selected hosting platform requires a one-time server-side secret configuration, explain the exact UI steps. Never work around this by putting secrets in the frontend.
+- Do not store Gmail App Password in RTDB, Firestore, localStorage, sessionStorage, URL parameters, client analytics, or logs.
+
+================================================================================
+4. FIREBASE CLIENT CONFIGURATION
+================================================================================
+
+Use the following supplied Firebase client configuration in a centralized module such as `src/lib/firebase.ts`. Do not duplicate initialization across files.
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCChxWV-gw1TiertXkUrfUgcC19y-CPNw",
+  authDomain: "hiiii-72d78.firebaseapp.com",
+  databaseURL: "https://hiiii-72d78-default-rtdb.firebaseio.com",
+  projectId: "hiiii-72d78",
+  storageBucket: "hiiii-72d78.firebasestorage.app",
+  messagingSenderId: "560685164053",
+  appId: "1:560685164053:web:7f672f7503160ec868901c"
+};
+
+Initialize and export:
+- Firebase app
+- Firebase Authentication
+- Firestore
+- Realtime Database
+
+Avoid initializing multiple Firebase app instances. Handle configuration errors visibly.
+
+Firebase client config is not a substitute for security rules. Restrict database access using authentication and seller-scoped rules. Privileged writes and payment approvals must be performed by the backend.
+
+================================================================================
+5. INFORMATION ARCHITECTURE AND EXACT URL ROUTES
+================================================================================
+
+Use clean, human-readable routes. Do not use hash-based routing. Ensure refresh/deep links work after deployment using correct SPA rewrite configuration.
+
+Public routes:
+- `/` — Product landing page.
+- `/login` — Seller login.
+- `/register` — Seller account registration, if public registration is enabled.
+- `/forgot-password` — Password reset.
+- `/pay/:orderId` — Public customer checkout for a single order.
+- `/pay/:orderId/status` — Public payment status page or status view.
+- `/terms` — Terms and service limitations.
+- `/privacy` — Privacy policy.
+- `/support` — Support and troubleshooting.
+
+Authenticated seller routes:
+- `/app` — Dashboard overview.
+- `/app/setup` — Initial configuration wizard.
+- `/app/payment-links` — Payment link list.
+- `/app/payment-links/new` — Create a payment link.
+- `/app/payment-links/:orderId` — Order details and shareable link.
+- `/app/transactions` — Transaction history.
+- `/app/transactions/:transactionId` — Transaction details.
+- `/app/reconciliation` — Ambiguous or unmatched payment evidence.
+- `/app/gmail` — Gmail connection and monitoring settings.
+- `/app/settings` — Seller profile and payment settings.
+- `/app/diagnostics` — Firebase, backend, Gmail, and monitoring diagnostics.
+
+Authorized administrator routes:
+- `/admin` — Platform health summary.
+- `/admin/sellers` — Authorized seller management.
+- `/admin/sellers/:sellerId` — Seller detail and connection state.
+- `/admin/audit-logs` — Restricted audit events.
+
+Routing rules:
+- Protect all `/app/*` routes with Firebase Authentication.
+- Protect `/admin/*` routes with server-verified administrator roles.
+- Public checkout may reveal only minimal information for its specific order.
+- Do not expose seller email credentials, private notes, complete emails, or other orders to public visitors.
+- Validate route parameters and handle missing or expired orders with proper pages.
+- Do not use client-side role checks as the only authorization control.
+
+================================================================================
+6. PAGE-BY-PAGE UI AND FUNCTIONAL SPECIFICATION
+================================================================================
+
+6.1 Landing Page `/`
+Purpose:
+Explain what FamX Pay does without claiming official affiliation with any UPI brand.
+
+UI:
+- Minimal header with brand mark and Login button.
+- Hero title: “Create a UPI Payment Link in Seconds”.
+- Supporting copy describing QR payments and transaction tracking.
+- Primary CTA: “Open Dashboard”.
+- Secondary CTA: “How It Works”.
+- Three feature sections: Payment Links, UPI QR Codes, Payment Tracking.
+- A simple four-step flow.
+- Security and verification limitations section.
+- Footer links to Privacy, Terms, and Support.
+
+Behavior:
+- CTA navigates to login or dashboard depending on authentication.
+- Do not show fabricated totals, customer reviews, bank logos implying affiliation, or fake trust badges.
+- Make all navigation functional.
+
+6.2 Login `/login`
+UI:
+- Brand.
+- Email and password inputs.
+- Sign in button.
+- Forgot password link.
+- Clear authentication error area.
+- Registration link if enabled.
+
+Behavior:
+- Use Firebase Authentication.
+- Disable submit while pending.
+- Prevent repeated requests.
+- Show invalid-credential and network errors clearly.
+- Redirect authenticated sellers to `/app`.
+- Never store raw passwords in the database.
+
+6.3 Registration `/register`
+UI:
+- Name, email, password, confirm password.
+- Terms acceptance checkbox.
+- Create account button.
+
+Behavior:
+- Validate inputs.
+- Create Firebase Auth user.
+- Create minimal seller profile using a trusted backend operation or restrictive rule.
+- Assign the normal seller role server-side. Never allow the browser to assign itself admin.
+- Send verification email if configured.
+- Handle duplicate email and weak-password errors.
+
+6.4 Forgot Password `/forgot-password`
+UI:
+- Email input.
+- Send reset link button.
+- Neutral response that avoids exposing whether an account exists.
+- Back to login link.
+
+Behavior:
+- Use Firebase password reset.
+- Show a useful generic confirmation.
+- Rate-limit repeated attempts where possible.
+
+6.5 Setup Wizard `/app/setup`
+Purpose:
+Connect the seller's UPI identity, Firebase-backed app settings, and Gmail monitoring.
+
+Wizard steps:
+1. Welcome and product limitations.
+2. Firebase connectivity test.
+3. Seller identity and UPI details.
+4. Gmail credentials and Test Connection.
+5. Review configuration and save.
+6. Setup completion.
+
+Seller fields:
+- Display name.
+- UPI ID/VPA.
+- Optional support email.
+- Gmail address.
+- Gmail App Password, masked.
+- Optional monitoring lookback window.
+- Currency fixed to INR.
+
+UI:
+- Stepper with current step and completion state.
+- Back and Continue buttons.
+- Field-level validation.
+- Test Connection button with spinner and result report.
+- Separate status cards for RTDB, Firestore, Gmail authentication, email discovery, parsing, credential provisioning, and monitor worker status.
+- Warning when any required component is not ready.
+
+Behavior:
+- Never save the Gmail App Password in Firebase.
+- Test credentials through an authenticated HTTPS backend endpoint.
+- Only store the Gmail address and non-secret status in Firebase.
+- If persistent server secret storage is unavailable, allow temporary testing only and explain why continuous monitoring cannot yet be enabled.
+- Do not claim setup is complete unless all required services are ready.
+- A missing permission must produce a clear diagnostic and a safe remediation step.
+
+6.6 Dashboard `/app`
+UI layout:
+- Responsive sidebar on desktop; compact navigation on mobile.
+- Header with seller name, connection health indicator, and account menu.
+- Summary cards:
+  1. Verified received amount.
+  2. Verified transaction count.
+  3. Pending orders.
+  4. Reconciliation cases.
+- Quick actions: Create Payment Link, View Transactions, Test Gmail.
+- Recent orders table/list.
+- Service health panel.
+- Loading, empty, stale-data, permission-error, and offline states.
+
+Data:
+- Use authorized server-derived counts and sums.
+- Store money as integer paise.
+- Format amounts with `Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" })`.
+- Do not count pending, expired, outgoing, or duplicate records as verified incoming funds.
+
+Behavior:
+- Subscribe to minimal RTDB live signals and query Firestore for records.
+- Clean up all listeners when components unmount.
+- Handle reconnects and stale data.
+- Avoid double-counting values from RTDB and Firestore.
+
+6.7 Payment Links List `/app/payment-links`
+UI:
+- Page title and Create Payment Link CTA.
+- Search by order ID or customer reference.
+- Filters: All, Pending, Paid/Verified, Expired, Needs Review, Failed.
+- Responsive table on desktop and cards on mobile.
+- Columns: Amount, Order ID, Created, Expires, Status, Actions.
+
+Actions:
+- Open details.
+- Copy public URL.
+- Share URL.
+- View QR.
+- Cancel order if allowed and not settled.
+
+Behavior:
+- Only show the current seller's orders.
+- Use server pagination or bounded queries.
+- Display precise status labels and timestamps.
+- A cancelled or expired order must not be relabelled paid by a public client action.
+
+6.8 Create Payment Link `/app/payment-links/new`
+UI:
+- Amount input with INR prefix.
+- Optional customer reference.
+- Optional customer display name.
+- Optional description.
+- Expiration preset defaulting to 10 minutes.
+- Preview card.
+- Create Link button.
+
+Validation:
+- Positive amount.
+- Use integer paise in stored records.
+- Apply configured minimum/maximum amount constraints.
+- Sanitize text inputs.
+- Prevent duplicate submissions.
+
+Creation flow:
+1. Authenticated frontend submits the requested order data to backend.
+2. Backend verifies seller identity and seller UPI configuration.
+3. Backend creates a cryptographically unpredictable order ID.
+4. Backend creates the Firestore order using a server timestamp and server-generated expiration.
+5. Backend writes the minimal RTDB live status.
+6. Frontend generates or receives the correct UPI URI and QR code.
+7. Frontend displays the generated URL and actions.
+
+Never trust the amount, seller ID, status, expiration, or payment reference as authoritative merely because the browser supplied them. The server validates and owns the final values.
+
+6.9 Payment Link Details `/app/payment-links/:orderId`
+UI:
+- Amount and order status.
+- Public payment URL with copy/share actions.
+- QR preview and Download QR PNG action.
+- Creation and expiration timestamps.
+- Transaction matching summary.
+- Event timeline.
+- Cancel action where valid.
+- Reconciliation guidance when needed.
+
+Behavior:
+- Verify seller ownership on the server.
+- Copy/share actions must work.
+- QR download must generate a real PNG, not a placeholder.
+- Show whether the order is awaiting payment, awaiting evidence, verified, expired, cancelled, or under review.
+
+6.10 Public Checkout `/pay/:orderId`
+Purpose:
+Provide a simple, trustworthy payment experience for customers without requiring an account.
+
+UI:
+- Merchant name.
+- Exact requested amount in INR.
+- Order reference.
+- QR code with download action.
+- Buttons for “Pay with Google Pay”, “Pay with PhonePe”, “Pay with any UPI app”, and a generic UPI payment option where supported.
+- Ten-minute countdown.
+- Payment instructions.
+- Live status.
+- Support link.
+
+UPI behavior:
+- Construct a valid UPI payment URI with the verified payee VPA, payee name, exact amount, currency, and supported reference fields.
+- URL-encode values correctly.
+- Use documented UPI intent behavior.
+- Do not invent undocumented provider-specific deep links.
+- App availability and handoff behavior depend on the device, browser, and installed applications.
+- Provide QR scanning as a fallback.
+
+Timer:
+- Use server-issued `expiresAt`.
+- Compute remaining time from the server expiration timestamp; do not rely on a timer that restarts at 10 minutes after refresh.
+- At zero, display expiration and stop presenting the order as newly payable.
+- Reconcile late-arriving evidence according to server policy.
+- Timer expiration alone is not proof that no payment occurred.
+
+Status:
+- Pending: “Waiting for payment confirmation”.
+- Evidence found: “Payment notification detected — verifying”.
+- Ambiguous: “Payment received notification needs review”.
+- Verified: “Payment verified” with checkmark and receipt details.
+- Expired: “This payment link has expired”.
+- Unavailable: “Verification temporarily unavailable”.
+
+Never show a success screen because the user clicked a UPI button or returned from a payment app. Never let a public client write the status as paid.
+
+6.11 Public Status `/pay/:orderId/status`
+UI:
+- Order reference.
+- Current safe public status.
+- Amount.
+- Merchant display name.
+- Last status update.
+- Retry refresh action.
+- Support instructions.
+
+Behavior:
+- Read only the minimal public status for the requested order.
+- Do not reveal private transaction evidence, seller email, Gmail settings, or other orders.
+- Use a realtime listener where safe.
+- If order does not exist or is not public, show a generic not-found page.
+
+6.12 Transactions `/app/transactions`
+UI:
+- Summary of verified received payments.
+- Search.
+- Date range filter.
+- Amount filter.
+- Direction filter.
+- Verification method filter.
+- Status filter.
+- Responsive transaction table.
+- CSV export.
+
+Columns:
+- Transaction ID.
+- Order ID, if matched.
+- Amount.
+- Direction.
+- Sender/counterparty if reliably available.
+- Received timestamp.
+- Verification status.
+- Details action.
+
+Behavior:
+- Only seller-authorized records.
+- Outgoing payments are excluded from received-payment totals.
+- Duplicate transaction IDs must be prevented server-side.
+- CSV exports must use safe escaping and avoid formula injection.
+- Use pagination.
+
+6.13 Transaction Details `/app/transactions/:transactionId`
+UI:
+- Amount.
+- Transaction reference.
+- Direction.
+- Received time.
+- Matched order.
+- Evidence source.
+- Verification assurance label.
+- Event timeline.
+- Redacted diagnostic details.
+
+Behavior:
+- Hide complete email bodies and sensitive headers by default.
+- Provide only the minimum evidence needed to understand the match.
+- Make reconciliation available for ambiguous cases.
+- Never expose a Gmail App Password or authentication token.
+
+6.14 Reconciliation `/app/reconciliation`
+UI:
+- Cases awaiting review.
+- Reason for review.
+- Amount and transaction reference when available.
+- Candidate orders, if any, with a clear ambiguity warning.
+- Evidence summary.
+- Actions: Match to order, Mark unrelated, Keep pending, Request manual confirmation.
+
+Behavior:
+- Enforce seller ownership and administrator authorization.
+- Require a confirmation step for consequential manual decisions.
+- Record who made the decision, when, and why.
+- Prevent one transaction from being assigned to multiple orders.
+- Do not claim bank settlement from email-only evidence.
+
+6.15 Gmail Settings `/app/gmail`
+UI:
+- Gmail address.
+- Masked App Password input only for entering/replacing the secret.
+- Test Connection.
+- Save Configuration.
+- Replace Credential.
+- Disable Monitoring.
+- Remove Stored Credential.
+- Recent scan time.
+- Last successful connection.
+- Monitor worker status.
+- Scan interval and lookback window, within safe configured limits.
+- Recent diagnostic results.
+
+Test Connection must execute:
+1. Input validation.
+2. TLS IMAP authentication to `imap.gmail.com:993`.
+3. Connection and timeout checks.
+4. Search of a bounded recent period, default 90 days.
+5. Candidate detection for FamPay/FamApp-related emails.
+6. Incoming-versus-outgoing notification classification.
+7. Parsing of amount, transaction ID, sender, message date, and reference fields when present.
+8. Structured result display.
+
+Separate test outcomes:
+- Input validation.
+- Authentication.
+- IMAP connection.
+- Relevant email discovery.
+- Incoming notification discovery.
+- Parsing completeness.
+- Credential provisioning.
+- Continuous monitoring status.
+
+A valid login with no matching emails must be reported as successful authentication plus a no-matching-email warning, not as an authentication failure.
+
+Never rely solely on sender display names. Treat message content as untrusted input. Do not approve an order merely because an email mentions an amount.
+
+6.16 Seller Settings `/app/settings`
+UI:
+- Merchant display name.
+- UPI VPA.
+- Optional support contact.
+- Account email.
+- Payment amount limits, if configured.
+- Session and security information.
+- Save and validation feedback.
+
+Behavior:
+- Do not allow the browser to change role or seller ownership.
+- Validate UPI VPA format, but do not claim that format validation proves ownership.
+- Require seller confirmation of the intended payment destination.
+- Update public checkout details only through validated, authorized operations.
+
+6.17 Diagnostics `/app/diagnostics`
+UI:
+- Firebase app initialization.
+- Authentication state.
+- RTDB connectivity and permission test.
+- Firestore connectivity and permission test.
+- Backend health.
+- Gmail authentication result.
+- Email discovery result.
+- Secret provisioning status.
+- Background worker status.
+- Last successful scan.
+- Last error code and remediation.
+
+Behavior:
+- Never reveal secrets or complete private email content.
+- Show real service responses, not hardcoded green indicators.
+- Distinguish a frontend connectivity test from a successful server-side privileged operation.
+- Provide copyable non-sensitive diagnostic reports.
+
+6.18 Admin Pages `/admin/*`
+Restrict all pages to a server-authorized administrator.
+
+`/admin`:
+- Service health.
+- Number of active sellers.
+- Pending reconciliation count.
+- Background worker health.
+- Error summary.
+
+`/admin/sellers`:
+- Seller list with minimal necessary profile and status.
+- Search and pagination.
+- Enable/disable account where authorized.
+
+`/admin/sellers/:sellerId`:
+- Seller configuration status.
+- Gmail test/monitor status.
+- Aggregate transaction metrics.
+- No plaintext credentials.
+
+`/admin/audit-logs`:
+- Timestamp.
+- Actor.
+- Action.
+- Target record.
+- Outcome.
+- Redacted metadata.
+
+Do not implement an insecure default administrator password. Provide a documented, secure administrator bootstrap procedure.
+
+6.19 Privacy, Terms, and Support
+Create original, honest policy pages.
+- Explain what email metadata is processed.
+- Explain what data is retained and for how long.
+- Explain that Gmail email matching may not establish settlement.
+- Provide a way to disable monitoring and remove stored credentials.
+- Do not make unsupported legal or financial guarantees.
+- Do not falsely claim compliance certifications.
+
+================================================================================
+7. DESIGN SYSTEM
+================================================================================
+
+Visual direction:
+- Premium, minimal, trustworthy fintech interface.
+- Restrained black, off-white, and warm cream palette.
+- Optional subtle violet accent only for interactive emphasis.
+- No neon overload.
+- No decorative emoji in the product UI.
+- Use Lucide icons.
+- Consistent 8-point spacing scale.
+- Rounded cards with restrained borders and shadows.
+- Strong typographic hierarchy.
+- Large, readable amount figures.
+- Touch-friendly mobile controls.
+- Keyboard navigation and accessible focus indicators.
+- Respect reduced-motion preferences.
+
+Suggested design tokens:
+- Background: #F7F6F2
+- Surface: #FFFFFF
+- Primary text: #171717
+- Secondary text: #666666
+- Border: #E5E2DC
+- Primary action: #242424
+- Success: accessible dark green
+- Warning: accessible amber/brown
+- Error: accessible dark red
+
+Dark mode may be added if implemented consistently; do not let it delay core payment functionality.
+
+Responsive behavior:
+- Mobile: single-column forms, stacked cards, bottom-friendly actions, scrollable data tables or cards.
+- Tablet: two-column dashboard cards where space allows.
+- Desktop: sidebar, content area, full transaction table.
+- Avoid horizontal overflow and tiny text.
+- Test at narrow Android widths and common desktop sizes.
+
+Motion:
+- Short, restrained transitions.
+- No endless animations.
+- No heavy effects that degrade lower-end phones.
+- Loading states should not block unrelated navigation unnecessarily.
+
+Every visible control must have a real, accessible behavior. Remove decorative buttons that do nothing.
+
+================================================================================
+8. DATABASE DESIGN
+================================================================================
+
+Use integer paise for all monetary amounts. Do not use floating-point INR values as the canonical stored amount.
+
+Firestore collections:
+
+`users/{uid}`
+- displayName
+- email
+- role: "seller" or "admin" assigned by trusted server logic
+- accountStatus
+- createdAt
+- updatedAt
+
+`users/{uid}/settings/payment`
+- sellerDisplayName
+- sellerUpiId
+- supportEmail
+- currency: "INR"
+- minimumAmountPaise
+- maximumAmountPaise
+- verificationMode
+- updatedAt
+
+`paymentOrders/{orderId}`
+- sellerId
+- amountPaise
+- currency
+- status
+- customerReference
+- description
+- paymentReference
+- createdAt
+- expiresAt
+- updatedAt
+- matchedTransactionId
+- verifiedAt
+- verificationAssurance
+
+`transactions/{transactionId}`
+- sellerId
+- orderId
+- amountPaise
+- currency
+- direction: "incoming" or "outgoing" or "unknown"
+- counterparty
+- receivedAt
+- sourceMessageIdHash
+- verificationStatus
+- verificationMethod
+- createdAt
+
+`reconciliationCases/{caseId}`
+- sellerId
+- transactionId
+- candidateOrderIds
+- reason
+- status
+- createdAt
+- resolvedAt
+- resolvedBy
+- resolutionNotes
+
+`auditLogs/{logId}`
+- actorId
+- action
+- targetId
+- timestamp
+- outcome
+- redactedMetadata
+
+Do not store the Gmail App Password in any of these collections.
+
+Realtime Database paths:
+
+`liveOrders/{orderId}`
+- sellerId
+- status
+- amountPaise
+- expiresAt
+- lastUpdatedAt
+
+`sellerLiveStats/{sellerId}`
+- pendingCount
+- verifiedCount
+- verifiedAmountPaise
+- lastActivityAt
+
+Only publish minimal fields needed by authorized seller views and the specific public order status view. Avoid placing private seller data in publicly readable paths.
+
+Data consistency:
+- Firestore is the canonical store for orders, transaction records, and reconciliation.
+- RTDB is used for low-latency status updates and live dashboard signals.
+- Do not treat two copies of the same amount as two payments.
+- Use server-side idempotency and transaction-level locking.
+- Document the strategy for recovering from partial Firestore/RTDB failures.
+- Use an outbox/retry pattern or an equivalent reliable synchronization mechanism if required.
+
+================================================================================
+9. FIREBASE RULES AND DEFAULT DEVELOPMENT MODE
+================================================================================
+
+The developer may already have development RTDB rules using public `".read": true` and `".write": true`.
+
+Support testing in such an existing development environment, but:
+- Never require permissive public rules for production.
+- Never silently enable public read/write.
+- Never claim the frontend can deploy security rules without authorized administrative access.
+- Include `database.rules.json`, `firestore.rules`, and any required indexes in the repository.
+- Explain how to deploy them through Firebase CLI or the Firebase Console.
+- Include seller-scoped access rules and explicit public-order read limitations.
+- Keep privileged approval and sensitive writes on the backend.
+- Test rules with Firebase Emulator Suite.
+- Provide a visible diagnostics result when access is denied.
+- Explain why a broad rule such as `".write": true` is unsafe.
+
+If public read/write development rules are active, show a clear development-only warning in diagnostics. Do not copy that configuration into production rules.
+
+================================================================================
+10. GMAIL INTEGRATION DETAILS
+================================================================================
+
+The Gmail App Password must be handled by the backend only.
+
+Test endpoint:
+`POST /api/gmail/test-connection`
+
+Authenticated request fields:
+- gmailAddress
+- appPassword for this test request
+- optional lookbackDays within configured limits
+
+Response fields:
+- overallStatus
+- inputValidation
+- authentication
+- imapConnection
+- relevantEmailCount
+- incomingCandidateCount
+- outgoingCandidateCount
+- parsingSummary
+- nonSensitiveErrorCode
+- suggestedAction
+
+Never return the password, access tokens, full email bodies, or private headers.
+
+Connection settings:
+- IMAP host: `imap.gmail.com`
+- Port: `993`
+- TLS required.
+- Connection and command timeouts required.
+- Rate limits and bounded retries required.
+
+Credential lifecycle:
+- Temporary tests may use an in-memory credential for the request, provided it is not logged or persisted.
+- For continuous monitoring, provision the credential in a supported encrypted server-side secret store.
+- Use least-privilege IAM access.
+- Support credential replacement, disablement, and deletion.
+- Record only non-secret connection state in Firebase.
+- Do not put ciphertext and its decryption key together in the same database.
+
+Monitoring:
+- Use a deployed scheduled worker, supported background worker, or suitable server-side process.
+- Do not assume a serverless HTTP function remains alive after returning a response.
+- Use a configurable, bounded scan interval.
+- Respect Gmail provider limits and avoid excessive repeated mailbox searches.
+- Use message IDs and transaction IDs for deduplication.
+- Minimize email content retention and avoid storing complete message bodies.
+- Handle IMAP disconnections, expired credentials, Gmail restrictions, and service outages.
+- Display last successful scan and last error accurately.
+
+Email classification:
+- Inspect sender address, headers, subject, and relevant message content.
+- Treat all email content as untrusted.
+- Distinguish incoming receipts from outgoing payments.
+- Support HTML and plain-text MIME.
+- Sanitize content before any rendering.
+- Extract amount, transaction ID, timestamp, counterparty, and reference only when present.
+- Record parser confidence and missing fields.
+- Never create missing transaction values by guessing.
+
+================================================================================
+11. FUNCTIONAL GMAIL TEST CONNECTION AND FAMPAY EMAIL DETECTION
+================================================================================
+
+Implement this feature as a real workflow, not a decorative button.
+
+Test Connection steps:
+1. Validate Gmail address and App Password input.
+2. Open a secure TLS IMAP connection.
+3. Authenticate against Gmail.
+4. Search a bounded time window, defaulting to 90 days.
+5. Find FamPay/FamApp-related candidate messages.
+6. Identify likely incoming payment notifications.
+7. Identify likely outgoing payment notifications separately.
+8. Parse a bounded sample of messages.
+9. Return structured test results.
+10. Close the IMAP connection.
+
+UI must show separate statuses:
+- Input validation.
+- Gmail authentication.
+- IMAP connectivity.
+- Relevant email discovery.
+- Incoming notification detection.
+- Outgoing notification detection.
+- Parsing completeness.
+- Credential provisioning.
+- Background monitoring.
+
+Expected cases:
+- Correct password and matching emails: authentication succeeds and candidates are reported.
+- Correct password and no matching emails: authentication succeeds, email discovery warns that none were found.
+- Incorrect password: authentication fails with a useful, non-secret error.
+- Network failure: show connection failure and retry guidance.
+- FamPay mention without a payment receipt: do not count it as an incoming transaction.
+- Outgoing receipt: classify separately and exclude from received funds.
+- Missing transaction ID or amount: mark incomplete and route to reconciliation where appropriate.
+
+Do not trust display name alone. Do not approve payment from an email merely because its amount matches an order.
+
+================================================================================
+12. PAYMENT STATE MACHINE
+================================================================================
+
+Use a documented state machine. Suggested order statuses:
+- `created`
+- `pending`
+- `evidence_detected`
+- `awaiting_reconciliation`
+- `verified`
+- `expired`
+- `cancelled`
+- `verification_failed`
+
+Allowed transitions must be enforced by the backend, not only by the UI.
+
+Examples:
+- `created` -> `pending`
+- `pending` -> `evidence_detected`
+- `evidence_detected` -> `verified` only when configured evidence requirements are met
+- `evidence_detected` -> `awaiting_reconciliation` when the match is ambiguous
+- `pending` -> `expired` when the server expiration policy applies
+- `expired` -> reconciliation state if late evidence appears
+- `cancelled` must not be silently turned into verified by a public request
+
+Do not allow the browser to submit an arbitrary next status. Validate each transition server-side and log consequential changes.
+
+Define a separate transaction verification status so an email candidate is not automatically equated with a settled payment.
+
+================================================================================
+13. PAYMENT MATCHING AND FRAUD RESISTANCE
+================================================================================
+
+Matching priority:
+1. Official provider transaction confirmation, if available.
+2. Reliable transaction record with an unambiguous unique order/payment reference.
+3. Email notification evidence with enough independent fields to make a high-confidence match.
+4. Ambiguous email evidence -> reconciliation.
+
+Rules:
+- Exact amount match is necessary but not sufficient.
+- Check transaction direction.
+- Check recipient/seller where reliable evidence exists.
+- Check order reference where present.
+- Reject duplicate transaction IDs.
+- Prevent a single transaction from satisfying multiple orders.
+- Do not arbitrarily assign same-amount transactions to the oldest or newest order.
+- Use server timestamps and idempotent operations.
+- Protect against concurrent processing.
+- Maintain an audit trail for manual resolution.
+- Never accept client-provided “payment successful” as proof.
+- Never rely on screenshots or redirect parameters as settlement proof.
+
+================================================================================
+14. UPI URI AND QR GENERATION
+================================================================================
+
+Generate a valid UPI payment URI only from validated seller configuration and server-approved order data.
+
+Include supported fields:
+- `pa`: verified seller UPI VPA.
+- `pn`: payee display name.
+- `am`: exact amount in INR.
+- `cu`: INR.
+- `tn`: safe payment description/reference.
+- `tr`: unique order reference when supported.
+
+URL-encode all parameter values. Confirm the intended recipient and amount before displaying the payment link.
+
+QR requirements:
+- Generate a real QR code that can be scanned by compatible UPI applications.
+- Download as PNG.
+- Offer a print-friendly layout.
+- Show merchant name and amount outside the encoded QR for readability.
+- Do not include credentials or private email information.
+- Test generated URIs with unit tests and QR decoding where possible.
+- Make clear that app support varies by device and UPI app.
+
+Payment initiation is not payment confirmation. Do not interpret a successful deep-link launch as a successful transaction.
+
+================================================================================
+15. API CONTRACTS
+================================================================================
+
+Use typed request/response schemas and consistent error envelopes.
+
+Suggested endpoints:
+- `POST /api/gmail/test-connection`
+- `POST /api/gmail/save-configuration`
+- `POST /api/gmail/disable-monitoring`
+- `POST /api/payment-orders`
+- `GET /api/payment-orders/:orderId`
+- `POST /api/payment-orders/:orderId/cancel`
+- `GET /api/payment-orders/:orderId/public-status`
+- `GET /api/transactions`
+- `GET /api/transactions/:transactionId`
+- `GET /api/reconciliation`
+- `POST /api/reconciliation/:caseId/resolve`
+- `GET /api/health`
+
+Requirements:
+- Authenticate protected endpoints.
+- Authorize every seller-owned record access.
+- Validate request schemas.
+- Apply rate limits to public endpoints.
+- Return non-sensitive error codes.
+- Do not return secrets or complete private email bodies.
+- Make writes idempotent where retries are possible.
+- Ensure deployment rewrites route `/api/*` to the backend correctly.
+
+If the chosen runtime uses callable Firebase Functions instead of HTTP routes, document and implement the equivalent contracts consistently.
+
+================================================================================
+16. ERROR STATES AND RECOVERY
+================================================================================
+
+Design meaningful UI and backend behavior for:
+- No internet connection.
+- Firebase initialization failure.
+- RTDB permission denied.
+- Firestore permission denied.
+- Seller session expired.
+- Gmail credentials invalid.
+- Gmail IMAP access blocked.
+- Gmail timeout or outage.
+- No relevant email found.
+- Parser cannot extract amount.
+- Missing transaction reference.
+- Duplicate transaction.
+- Multiple candidate orders with the same amount.
+- UPI app not installed.
+- QR generation failure.
+- Payment link expired.
+- Backend unavailable.
+- Partial RTDB/Firestore synchronization failure.
+- Monitoring worker stopped.
+- Secret provisioning failure.
+
+Every error should state:
+1. What failed.
+2. Whether the payment status is known or unknown.
+3. What the user can safely do next.
+4. Whether a retry is available.
+
+Do not turn unknown status into failure or success without evidence.
+
+================================================================================
+17. PRIVACY AND SECURITY
+================================================================================
+
+Required controls:
+- Firebase Authentication.
+- Server-side role and ownership checks.
+- Restrictive Firestore and RTDB rules.
+- Secret Manager or an equivalent protected server secret store.
+- HTTPS.
+- Request validation.
+- Rate limiting.
+- Idempotency keys for critical writes.
+- Audit logs for approvals and administrative changes.
+- Minimal email data retention.
+- Sanitized email rendering.
+- CSV formula-injection prevention.
+- Secure error messages.
+- Dependency updates and vulnerability review.
+- Data deletion and credential revocation flows.
+- No secrets in browser storage, URLs, logs, analytics, or repository.
+- No public read/write rules in production.
+
+Do not collect UPI PINs, bank passwords, OTPs, card credentials, or other payment authentication secrets.
+
+Add an honest privacy notice explaining email processing and retention. Do not claim certifications or regulatory compliance without evidence.
+
+================================================================================
+18. TESTING AND ACCEPTANCE CRITERIA
+================================================================================
+
+Unit tests:
+- Amount to paise conversion.
+- INR formatting.
+- UPI URI construction.
+- QR generation.
+- Email parsing.
+- Incoming/outgoing classification.
+- Order state transitions.
+- Expiration calculations.
+- Idempotency.
+- Duplicate transaction rejection.
+- Same-amount ambiguity.
+- Safe CSV export.
+
+Integration tests:
+- Firebase Authentication.
+- RTDB access and rules.
+- Firestore access and rules.
+- Payment order creation.
+- RTDB live status updates.
+- Gmail Test Connection using mocked IMAP in automated tests.
+- Secret provisioning contract.
+- Backend authorization.
+- Reconciliation workflow.
+- Partial database failure recovery.
+
+End-to-end tests:
+- Seller login.
+- Complete setup wizard.
+- Test Gmail connection.
+- Create a payment link.
+- Open the public checkout in a separate browser context.
+- Generate and download QR.
+- Simulate incoming email evidence in a test environment.
+- Verify that a strong, unambiguous test match updates status.
+- Verify that ambiguous and outgoing notifications do not approve the order.
+- Verify that expired links display the correct state.
+- Verify that one seller cannot read another seller's private data.
+
+Do not use real customer transactions or production credentials in automated tests. Use test accounts, emulators, and mock email fixtures.
+
+Acceptance requirements:
+- Every visible button works.
+- Every route loads directly and survives refresh.
+- No hardcoded successful connection states.
+- No fabricated transactions.
+- No App Password in the frontend bundle or ordinary database records.
+- No client-side payment approval.
+- All amount calculations use integer paise.
+- Both RTDB and Firestore are integrated for their documented purposes.
+- The application behaves correctly on Android and desktop.
+- Errors and incomplete setup are clearly shown.
+- README instructions reproduce the setup.
+
+================================================================================
+19. PERFORMANCE AND ACCESSIBILITY
+================================================================================
+
+- Use route-level code splitting where appropriate.
+- Avoid unnecessary RTDB/Firestore listeners.
+- Clean up subscriptions on unmount.
+- Use bounded queries and pagination.
+- Avoid loading full email content when metadata is sufficient.
+- Prevent duplicate submissions.
+- Keep interactions responsive on mid-range Android devices.
+- Support keyboard navigation and visible focus states.
+- Use accessible labels and error descriptions.
+- Maintain readable contrast.
+- Respect reduced-motion preferences.
+- Avoid giant bundled dependencies where a small maintained library is sufficient.
+
+================================================================================
+20. DELIVERABLES
+================================================================================
+
+Produce:
+1. Complete React + TypeScript frontend.
+2. All specified routes and responsive page layouts.
+3. Centralized Firebase initialization.
+4. Firestore schema and indexes.
+5. RTDB schema and rules.
+6. Firestore Security Rules.
+7. Secure Gmail backend.
+8. Gmail Test Connection and email discovery workflow.
+9. Secure credential provisioning flow.
+10. Scheduled or otherwise reliable server-side monitoring.
+11. Payment order API.
+12. UPI URI and QR generation.
+13. Live payment status updates.
+14. Transaction history and reconciliation.
+15. Seller authentication and authorization.
+16. Admin pages with protected access.
+17. Automated tests.
+18. `.gitignore` that excludes local secrets and build output.
+19. A detailed README.
+20. A deployment checklist and troubleshooting guide.
+
+Do not create a `.env` file as a mandatory setup step. Do not put secrets in frontend configuration to satisfy this requirement.
+
+If the repository already exists, edit it in place and preserve existing working features. If it is empty, scaffold the project cleanly.
+
+================================================================================
+21. IMPLEMENTATION ORDER
+================================================================================
+
+Implement in this order:
+
+Phase 1: Inspect repository, establish architecture, scaffold application, install dependencies, and configure routing.
+
+Phase 2: Implement Firebase initialization, authentication, database types, security rules, and diagnostics.
+
+Phase 3: Build the design system, responsive layouts, landing page, login, registration, and setup wizard.
+
+Phase 4: Implement backend Gmail Test Connection, structured test report, secret provisioning, and safe monitoring architecture.
+
+Phase 5: Implement seller payment settings, payment order creation, unique links, UPI URI generation, and QR downloads.
+
+Phase 6: Implement public checkout, authoritative expiration, live status, and error states.
+
+Phase 7: Implement Gmail message discovery, classification, deduplication, transaction matching, and reconciliation.
+
+Phase 8: Implement dashboard metrics, payment-link management, transaction history, and authorized admin pages.
+
+Phase 9: Run tests, inspect mobile responsiveness, fix runtime errors, test security rules, and verify direct-route refresh behavior.
+
+Phase 10: Write complete setup/deployment documentation and report what is genuinely working versus what still requires manual account configuration.
+
+Do not stop after any phase merely because the UI looks complete.
+
+================================================================================
+22. FINAL RESPONSE FROM THE CODING AGENT
+================================================================================
+
+After implementation, report:
+- Features implemented.
+- Exact files created or modified.
+- Commands used to run and test the project.
+- Test results.
+- Routes implemented.
+- Firebase configuration status.
+- Security-rule deployment status.
+- Gmail Test Connection status.
+- Whether secret provisioning works.
+- Whether continuous monitoring is deployed.
+- Which items require the developer's manual Firebase/Gmail/deployment action.
+- Known limitations.
+- Exact next steps to run the project from an Android phone if possible.
+
+Never claim a test passed unless it was actually run. Never claim deployment, Gmail access, or payment verification works unless it has been tested in the relevant environment.
+
+END OF MASTER PROMPT
